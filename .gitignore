@@ -1,0 +1,77 @@
+# Сборка и объектные файлы
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.so.*
+*.dylib
+*.a
+*.lib
+
+# Сгенерированные Qt файлы
+moc_*.cpp
+moc_*.h
+*.moc
+qrc_*.cpp
+ui_*.h
+*.qmlc
+*.jsc
+
+# qmake временные файлы
+object_script.*.Release
+object_script.*.Debug
+*_plugin_import.cpp
+.qmake.cache
+.qmake.stash
+Makefile
+Makefile.*
+*.prl
+*.qm
+
+# Папки сборки (ЭТО ВАЖНО!)
+build/
+build-*/
+*-build/
+debug/
+debug-*/
+release/
+release-*/
+Debug/
+Release/
+
+# Qt Creator настройки
+*.pro.user
+*.pro.user.*
+*.creator.user*
+*.creator.user.*
+*.autosave
+CMakeLists.txt.user*
+CMakeLists.txt.user
+
+# Qt Creator Qml
+*.qmlproject.user
+*.qmlproject.user.*
+
+# Qt Creator 4.8+ compilation database
+compile_commands.json
+
+# Qt Creator local machine specific files
+*creator.user*
+
+# Qt Creator сгенерированный qml cache
+*_qmlcache.qrc
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Папки с документацией (если генерируется)
+docs/html/
+docs/latex/
+
+# Логи
+*.log
