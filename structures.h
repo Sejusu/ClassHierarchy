@@ -37,7 +37,6 @@ enum class ErrorType {
     invalidCharacters, ambiguousRule, extraField
 };
 
-// Класс для обработки и генерации сообщений об ошибках
 // Класс для обработки и генерации подробных сообщений об ошибках
 class Error {
 public:
