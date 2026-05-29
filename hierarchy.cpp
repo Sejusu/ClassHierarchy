@@ -92,3 +92,16 @@ void removeTransitiveEdges(ClassHierarchy& hierarchy) {
 
     hierarchy.edges = optimizedEdges;
 }
+
+// Генерация строки в формате DOT для Graphviz
+QString generateDot(const ClassHierarchy& hierarchy) {
+    QString dot = "digraph G {\n";
+    for (auto it = hierarchy.edges.constBegin(); it != hierarchy.edges.constEnd(); ++it) {
+        QString parent = it.key();
+        for (const QString& child : it.value()) {
+            dot += QString("    \"%1\" -> \"%2\";\n").arg(parent, child);
+        }
+    }
+    dot += "}\n";
+    return dot;
+}
