@@ -1,19 +1,80 @@
 #include <QCoreApplication>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QTextStream>
+#include <QDebug>
+#include "structures.h"
+#include "validator.cpp"
+#include "hierarchy.cpp"
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     QCoreApplication a(argc, argv);
 
-    // Set up code that uses the Qt event loop here.
-    // Call a.quit() or a.exit() to quit the application.
-    // A not very useful example would be including
-    // #include <QTimer>
-    // near the top of the file and calling
-    // QTimer::singleShot(5000, &a, &QCoreApplication::quit);
-    // which quits the application after 5 seconds.
+    if (argc < 3) {
+        QTextStream errorStream(stderr);
+        errorStream << "Использование: classHierarchy.exe <входной_файл.json> <выходной_файл.dot>" << Qt::endl;
+        return 1;
+    }
 
-    // If you do not need a running Qt event loop, remove the call
-    // to a.exec() or use the Non-Qt Plain C++ Application template.
+    QString inputFilePath = argv[1];
+    QString outputFilePath = argv[2];
 
-    return a.exec();
+    QFile inputFile(inputFilePath);
+    if (!inputFile.open(QIODevice::ReadOnly)) {
+        Error err(ErrorType::inputFileNotExist);
+        QTextStream out(stdout);
+        out << err.generateErrorMessage() << Qt::endl;
+        return 1;
+    }
+
+    QByteArray data = inputFile.readAll();
+    inputFile.close();
+
+    if (data.isEmpty()) {
+        Error err(ErrorType::emptyInputFile);
+        QTextStream out(stdout);
+        out << err.generateErrorMessage() << Qt::endl;
+        return 1;
+    }
+
+    QJsonParseError parseError;
+    QJsonDocument jsonDoc = QJsonDocument::fromJson(data, &parseError);
+    if (parseError.error != QJsonParseError::NoError) {
+        Error err(ErrorType::jsonSyntaxError);
+        QTextStream out(stdout);
+        out << err.generateErrorMessage() << Qt::endl;
+        return 1;
+    }
+
+    QSet<Error> errors;
+    QVector<Class> parsedClasses;
+
+    if (!validateInput(jsonDoc.object(), errors, parsedClasses)) {
+        QTextStream out(stdout);
+        for (const Error& err : errors) {
+            out << err.generateErrorMessage() << Qt::endl;
+        }
+        return 1;
+    }
+
+    ClassHierarchy hierarchy;
+    buildClassHierarchy(hierarchy, parsedClasses);
+    removeTransitiveEdges(hierarchy);
+
+    QString dotContent = generateDot(hierarchy);
+
+    QFile outputFile(outputFilePath);
+    if (!outputFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        Error err(ErrorType::outputFileCreateFail);
+        QTextStream out(stdout);
+        out << err.generateErrorMessage() << Qt::endl;
+        return 1;
+    }
+
+    QTextStream out(&outputFile);
+    out << dotContent;
+    outputFile.close();
+
+    return 0;
 }
