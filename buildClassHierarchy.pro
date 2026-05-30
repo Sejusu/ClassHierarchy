@@ -8,7 +8,8 @@ CONFIG += c++17 cmdline
 
 SOURCES += \
         hierarchy.cpp \
-        main.cpp
+        main.cpp \
+        validator.cpp
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
@@ -17,4 +18,5 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 
 HEADERS += \
     hierarchy.h \
-    structures.h
+    structures.h \
+    validator.h
