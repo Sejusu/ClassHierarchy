@@ -16,3 +16,7 @@ HEADERS += \
 SOURCES +=  tst_test.cpp \
     ../validator.cpp \
     ../hierarchy.cpp
+
+QMAKE_CXXFLAGS += --coverage
+QMAKE_LFLAGS += --coverage
+QMAKE_CXXFLAGS += -O0
