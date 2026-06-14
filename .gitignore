@@ -75,3 +75,4 @@ docs/latex/
 
 # Логи
 *.log
+functional_tests/
