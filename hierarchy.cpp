@@ -1,9 +1,19 @@
 #include "hierarchy.h"
 #include <QStringList>
 
+/*!
+ * \brief Конструктор по умолчанию класса hierarchy.
+ */
 hierarchy::hierarchy() {}
 
-// Функция проверки совпадения правил одного свойства
+/*!
+ * \brief Внутренняя функция для проверки совпадения правил одного свойства.
+ * * Сопоставляет тип правила, имя свойства, а также его внутреннее наполнение
+ * (количество элементов или точные списки значений) в зависимости от строгости правила.
+ * * \param[in] rule Базовое правило (ограничение родительского класса).
+ * \param[in] candidate Проверяемое правило (свойство потенциального наследника).
+ * \return \c true, если правила идентичны/совместимы, иначе \c false.
+ */
 bool matchProperty(const PropertyRule& rule, const PropertyRule& candidate) {
     if (rule.name != candidate.name) return false;
     if (rule.ruleType != candidate.ruleType) return false;
@@ -17,7 +27,14 @@ bool matchProperty(const PropertyRule& rule, const PropertyRule& candidate) {
     return true;
 }
 
-// Функция проверки, является ли класс A базовым для класса B (на подмножество свойств)
+/*!
+ * \brief Внутренняя функция проверки отношения «базовый-производный» между классами.
+ * * Класс \a A считается базовым (подмножеством) для \a B, если все свойства,
+ * описанные в \a A, присутствуют в \a B и полностью удовлетворяют критериям функции matchProperty.
+ * * \param[in] A Потенциальный базовый класс.
+ * \param[in] B Потенциальный дочерний класс.
+ * \return \c true, если класс \a A является подмножеством класса \a B, иначе \c false.
+ */
 bool isSubset(const ClassNode& A, const ClassNode& B) {
     if (A.properties.isEmpty()) return true;
     for (const PropertyRule& ruleA : A.properties) {
@@ -33,7 +50,14 @@ bool isSubset(const ClassNode& A, const ClassNode& B) {
     return true;
 }
 
-// Первоначальное построение графа (все связи тип-подтип)
+/*!
+ * \brief Реализация построения графа иерархии классов.
+ * * Конвертирует первичные структуры \c Class во внутреннее представление вершин \c ClassNode,
+ * выполняет попарное сравнение всех классов через отношение \c isSubset и формирует
+ * первоначальную таблицу смежности связей (включая избыточные ребра).
+ * * \param[out] hierarchy Объект иерархии для сохранения вершин и ребер.
+ * \param[in] parsedClasses Вектор распарсенных и валидированных классов.
+ */
 void buildClassHierarchy(ClassHierarchy& hierarchy, const QVector<Class>& parsedClasses) {
     for (const Class& cls : parsedClasses) {
         ClassNode* node = new ClassNode(cls.name);
@@ -57,7 +81,13 @@ void buildClassHierarchy(ClassHierarchy& hierarchy, const QVector<Class>& parsed
     }
 }
 
-// Оптимизированное удаление избыточных (транзитивных) ребер
+/*!
+ * \brief Реализация алгоритма транзитивного сокращения графа.
+ * * Обходит граф и исключает избыточные ребра прямой вложенности, если связь между
+ * вершинами может быть установлена транзитивно через промежуточные узлы (цепочки наследования).
+ * Предотвращает поломку структуры при наличии циклических зависимостей (взаимного равенства подмножеств).
+ * * \param[in,out] hierarchy Оптимизируемый объект иерархии.
+ */
 void removeTransitiveEdges(ClassHierarchy& hierarchy) {
     QMap<QString, QList<QString>> optimizedEdges = hierarchy.edges;
 
@@ -77,7 +107,6 @@ void removeTransitiveEdges(ClassHierarchy& hierarchy) {
                     if (C == A || C == B) continue;
 
                     if (currentChildren.contains(C)) {
-
                         bool isCyclicAC = hierarchy.edges.contains(C) && hierarchy.edges[C].contains(A);
                         bool isCyclicAB = hierarchy.edges.contains(B) && hierarchy.edges[B].contains(A);
 
@@ -93,8 +122,12 @@ void removeTransitiveEdges(ClassHierarchy& hierarchy) {
     hierarchy.edges = optimizedEdges;
 }
 
-// Генерация строки в формате DOT для Graphviz
-QString generateDot(const ClassHierarchy& hierarchy) {
+/*!
+ * \brief Формирует выходное представление графа в синтаксисе языка описания DOT.
+ * \param[in] hierarchy Объект иерархии.
+ * \return Строка в формате DOT для визуализации (Graphviz).
+ */
+QString hierarchy::generateDot(const ClassHierarchy& hierarchy) {
     QString dot = "digraph G {\n";
     for (auto it = hierarchy.edges.constBegin(); it != hierarchy.edges.constEnd(); ++it) {
         QString parent = it.key();

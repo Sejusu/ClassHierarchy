@@ -8,50 +8,98 @@
 #include <QMap>
 #include <QHash>
 
+/*!
+ * \enum PropertyRuleType
+ * \brief Перечисление, определяющее тип строгости правила для свойства.
+ */
 enum class PropertyRuleType {
-    HasProperty,
-    HasPropertyWithCount,
-    HasPropertyWithValue,
-    HasPropertyWithValues
+    HasProperty,           /*!< Просто наличие свойства с любым значением. */
+    HasPropertyWithCount,  /*!< Наличие свойства со строгим ограничением на количество элементов. */
+    HasPropertyWithValue,  /*!< Наличие свойства, содержащего конкретное одиночное значение. */
+    HasPropertyWithValues  /*!< Наличие свойства, содержащего определенный массив значений. */
 };
 
-// Структуры для первоначального парсинга данных
+/*!
+ * \struct Property
+ * \brief Структура данных для хранения информации о свойстве, полученном при первичном парсинге JSON.
+ */
 struct Property {
-    QString name;
-    PropertyRuleType ruleType;
-    QVector<int> valueCount;     // Всегда массив (размер 1)
-    QVector<int> expectedValues; // Всегда массив (размер от 1 до 100)
+    QString name;                 /*!< Имя свойства (идентификатор). */
+    PropertyRuleType ruleType;    /*!< Тип правила валидации свойства. */
+    QVector<int> valueCount;      /*!< Ограничение количества: массив, всегда содержащий строго 1 элемент. */
+    QVector<int> expectedValues;  /*!< Ожидаемые значения: массив размером от 1 до 100 элементов. */
 };
 
+/*!
+ * \struct Class
+ * \brief Структура данных, представляющая описание класса на этапе первичного парсинга.
+ */
 struct Class {
-    QString name;
-    QVector<Property> properties;
+    QString name;                 /*!< Уникальное имя класса. */
+    QVector<Property> properties; /*!< Список правил-свойств, определяющих данный класс. */
 };
 
-// Типы возможных ошибок
+/*!
+ * \enum ErrorType
+ * \brief Перечисление всех возможных типов ошибок валидации структуры и синтаксиса входных данных.
+ */
 enum class ErrorType {
-    noError, inputFileNotExist, outputFileCreateFail, emptyInputFile, jsonSyntaxError,
-    emptyClassesArray, tooManyClasses, missingClassName, missingProperties, emptyProperties,
-    missingPropertyName, tooManyProperties, invalidValueType, invalidValueRange, invalidValueCountType,
-    emptyExpectedValue, tooManyExpectedValues, invalidClassNameLength, invalidPropertyNameLength,
-    invalidCharacters, ambiguousRule, extraField
+    noError,                     /*!< Ошибки отсутствуют. */
+    inputFileNotExist,           /*!< Входной файл не найден по указанному пути. */
+    outputFileCreateFail,        /*!< Не удалось создать результирующий файл на диске. */
+    emptyInputFile,              /*!< Входной файл имеет нулевой размер. */
+    jsonSyntaxError,             /*!< Нарушена валидность синтаксиса JSON-пакета. */
+    emptyClassesArray,           /*!< Корневой массив "classes" пуст или отсутствует. */
+    tooManyClasses,              /*!< Количество классов превышает лимит в 100 элементов. */
+    missingClassName,            /*!< У объекта класса отсутствует поле "class_name". */
+    missingProperties,           /*!< У объекта класса отсутствует обязательный массив "properties". */
+    emptyProperties,             /*!< Массив "properties" присутствует, но не содержит элементов. */
+    missingPropertyName,         /*!< У конкретного свойства отсутствует обязательное поле "name". */
+    tooManyProperties,           /*!< Количество свойств в одном классе превышает лимит в 100 элементов. */
+    invalidValueType,            /*!< Поле "expected_value" содержит нецелочисленные типы данных. */
+    invalidValueRange,           /*!< Числовое значение выходит за рамки допустимого диапазона [1, 1000]. */
+    invalidValueCountType,       /*!< Поле "value_count" не является массивом из одного целого числа. */
+    emptyExpectedValue,          /*!< Массив ограничений "expected_value" не содержит элементов. */
+    tooManyExpectedValues,       /*!< Размер массива "expected_value" превысил лимит в 100 элементов. */
+    invalidClassNameLength,      /*!< Длина имени класса выходит за рамки ограничений (1-255 символов). */
+    invalidPropertyNameLength,   /*!< Длина имени свойства некорректна. */
+    invalidCharacters,           /*!< Имя содержит недопустимые символы (разрешены: буквы, цифры, '_', '-'). */
+    ambiguousRule,               /*!< Противоречие: одновременно заданы "value_count" и "expected_value". */
+    extraField                   /*!< Обнаружено неизвестное/лишнее поле на любом из уровней структуры. */
 };
 
-// Класс для обработки и генерации подробных сообщений об ошибках
+/*!
+ * \class Error
+ * \brief Класс-контейнер для обработки, уникализации и генерации детальных сообщений об ошибках.
+ * * Предоставляет контекстную информацию о месте возникновения ошибки, включая имена свойств,
+ * ошибочные значения, индексы и пути к файлам. Поддерживает хеширование для хранения в QSet.
+ */
 class Error {
 public:
-    ErrorType type;
-    QString incorrectProperty; // Имя класса или свойства, где произошла ошибка
-    QString incorrectChar;     // Конкретный недопустимый символ
-    int incorrectValue;        // Ошибочное числовое значение
-    int incorrectSize;         // Полученный размер/длина для вывода ограничений
-    QString filePath;          // Путь к файлу
+    ErrorType type;             /*!< Категория/тип произошедшей ошибки. */
+    QString incorrectProperty;  /*!< Контекст: имя класса или свойства, вызвавшего ошибку. */
+    QString incorrectChar;      /*!< Контекст: символ, не прошедший валидацию регулярным выражением. */
+    int incorrectValue;         /*!< Контекст: числовое значение, вышедшее за пределы диапазона. */
+    int incorrectSize;          /*!< Контекст: фактический ошибочный размер структуры или индекс массива. */
+    QString filePath;           /*!< Контекст: путь к файлу, в котором обнаружена проблема. */
 
-    // Универсальный конструктор для полной инициализации контекста ошибки
+    /*!
+     * \brief Универсальный конструктор для инициализации контекста ошибки.
+     * \param[in] t Тип ошибки.
+     * \param[in] prop Имя ошибочного класса/свойства (опционально).
+     * \param[in] ch Недопустимый символ (опционально).
+     * \param[in] val Ошибочное числовое значение (опционально).
+     * \param[in] size Фактическая длина или индекс (опционально).
+     * \param[in] path Путь к обрабатываемому файлу (опционально).
+     */
     Error(ErrorType t, const QString& prop = "", const QString& ch = "", int val = 0, int size = 0, const QString& path = "")
         : type(t), incorrectProperty(prop), incorrectChar(ch), incorrectValue(val), incorrectSize(size), filePath(path) {}
 
-    // Оператор сравнения (учитывает контекст, чтобы в QSet попадали уникальные ошибки для разных классов/свойств)
+    /*!
+     * \brief Оператор равенства для обеспечения уникальности ошибок в QSet.
+     * \param[in] other Другой объект ошибки для сравнения.
+     * \return \c true, если все контекстные поля полностью совпадают.
+     */
     bool operator==(const Error& other) const {
         return type == other.type &&
                incorrectProperty == other.incorrectProperty &&
@@ -61,15 +109,26 @@ public:
                filePath == other.filePath;
     }
 
-    // Хеш-функция для QSet
-    friend size_t qHash(const Error& key, size_t seed = 0) {
+    /*!
+     * \brief Глобальная дружественная функция для вычисления хеш-значения объекта Error.
+     * Позволяет использовать структуру Error в качестве элементов контейнера QSet.
+     * \param[in] key Объект ошибки, для которого считается хеш.
+     * \param[in] seed Базовое значение для хеширования.
+     * \return Вычисленное значение хэш-функции.
+     */
+    friend size_t qHash(const Error& key, size_t seed) {
         return qHash(static_cast<int>(key.type), seed) ^
                qHash(key.incorrectProperty, seed) ^
                qHash(key.incorrectChar, seed) ^
                qHash(key.incorrectValue, seed);
     }
 
-    // Метод генерации информативного сообщения с указанием места и сути ошибки
+    /*!
+     * \brief Формирует понятное человеку, локализованное текстовое сообщение об ошибке.
+     * * Метод автоматически подставляет контекстные данные структуры (индексы, лимиты, имена)
+     * в соответствующий языковой шаблон.
+     * * \return Строка с подробным описанием ошибки.
+     */
     QString generateErrorMessage() const {
         QString propText = incorrectProperty.isEmpty() ? "(имя не указано)" : QString("'%1'").arg(incorrectProperty);
         QString pathText = filePath.isEmpty() ? "указанный файл" : QString("'%1'").arg(filePath);
@@ -114,36 +173,65 @@ public:
     }
 };
 
-// Представление правил для работы с графом
+/*!
+ * \class PropertyRule
+ * \brief Представление правила-свойства, адаптированное под эффективную работу в графе.
+ * * В отличие от первичной структуры \c Property, использует контейнеры \c QList, оптимизированные
+ * для частых операций чтения/сравнения при сопоставлении вершин графа.
+ */
 class PropertyRule {
 public:
-    QString name;
-    PropertyRuleType ruleType;
-    QList<int> valueCount;
-    QList<int> expectedValues;
+    QString name;                 /*!< Имя свойства. */
+    PropertyRuleType ruleType;    /*!< Тип логического правила. */
+    QList<int> valueCount;        /*!< Ограничение на количество значений. */
+    QList<int> expectedValues;    /*!< Список допустимых значений свойства. */
 
+    /*!
+     * \brief Оператор поэлементного сравнения двух правил.
+     */
     bool operator==(const PropertyRule& other) const {
         return name == other.name && ruleType == other.ruleType && valueCount == other.valueCount && expectedValues == other.expectedValues;
     }
 
-    friend size_t qHash(const PropertyRule& key, size_t seed = 0) {
+    /*!
+     * \brief Функция хеширования правила для оптимизации поиска внутри QSet.
+     */
+    friend size_t qHash(const PropertyRule& key, size_t seed) {
         return qHash(key.name, seed) ^ qHash(static_cast<int>(key.ruleType), seed);
     }
 };
 
+/*!
+ * \class ClassNode
+ * \brief Класс узла графа, представляющий отдельный класс и уникальное множество его правил.
+ */
 class ClassNode {
 public:
-    QString className;
-    QSet<PropertyRule> properties;
+    QString className;             /*!< Имя класса (уникальный идентификатор узла). */
+    QSet<PropertyRule> properties; /*!< Множество правил, сопоставленных данному классу. */
 
+    /*!
+     * \brief Конструктор узла с установкой имени класса.
+     * \param[in] name Строковое имя класса.
+     */
     ClassNode(const QString& name) : className(name) {}
 };
 
+/*!
+ * \class ClassHierarchy
+ * \brief Класс, инкапсулирующий структуру ориентированного графа иерархии.
+ * * Содержит в себе набор динамически выделенных узлов классов и таблицу смежности
+ * для хранения направленных ребер зависимостей. Гарантирует очистку памяти в деструкторе.
+ */
 class ClassHierarchy {
 public:
-    QSet<ClassNode*> classes;
-    QMap<QString, QList<QString>> edges;
+    QSet<ClassNode*> classes;          /*!< Множество указателей на все вершины (узлы) графа. */
+    QMap<QString, QList<QString>> edges; /*!< Таблица смежности: Имя_Родителя -> Список_Имен_Потомков. */
 
+    /*!
+     * \brief Деструктор класса ClassHierarchy.
+     * Автоматически освобождает динамическую память, выделенную под объекты ClassNode в куче.
+     */
     ~ClassHierarchy() {
         qDeleteAll(classes);
     }

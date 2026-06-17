@@ -2,14 +2,33 @@
 #include <QRegularExpression>
 #include <QJsonValue>
 
+/*!
+ * \brief Конструктор по умолчанию класса validator.
+ */
 validator::validator() {}
 
-// Проверка на допустимые символы (алфавиты, цифры, подчёркивание, дефис)
+/*!
+ * \brief Внутренняя функция для проверки соответствия имени регулярному выражению.
+ * * Допускает использование букв латиницы и кириллицы (включая ё/Ё), цифр,
+ * знаков подчёркивания и дефисов.
+ * * \param[in] name Проверяемая строка.
+ * \return \c true, если строка содержит только валидные символы, иначе \c false.
+ */
 static bool isValidName(const QString& name) {
     static QRegularExpression re("^[A-Za-z0-9_А-Яа-яёЁ\\-]+$");
     return re.match(name).hasMatch();
 }
 
+/*!
+ * \brief Внутренняя функция комплексной проверки строк на ограничения длины и символьный состав.
+ * * Выявляет недопустимые символы, посимвольно локализует первый некорректный знак
+ * для вывода подробного контекста ошибки.
+ * * \param[in] name Проверяемое текстовое имя.
+ * \param[in] contextError Текстовое описание контекста для логирования.
+ * \param[out] errors Контейнер для фиксации ошибок.
+ * \param[in] isClass Флаг сущности: \c true — проверяется имя класса, \c false — имя свойства.
+ * \return \c true, если имя прошло все проверки, иначе \c false.
+ */
 bool checkStringCharacters(const QString& name, const QString& contextError, QSet<Error>& errors, bool isClass = true) {
     if (name.isEmpty() || name.length() > 255) {
         ErrorType lengthError = isClass ? ErrorType::invalidClassNameLength
@@ -28,6 +47,14 @@ bool checkStringCharacters(const QString& name, const QString& contextError, QSe
     return true;
 }
 
+/*!
+ * \brief Внутренняя функция валидации правила "value_count".
+ * * Проверяет, является ли значение массивом строго из 1 целого числа в диапазоне от 1 до 1000.
+ * * \param[in] propObj Текущий JSON-объект свойства.
+ * \param[in] propName Имя свойства.
+ * \param[out] prop Заполняемая структура свойства.
+ * \param[out] errors Контейнер ошибок.
+ */
 void checkValueCountRule(const QJsonObject& propObj, const QString& propName, Property& prop, QSet<Error>& errors) {
     if (!propObj.contains("value_count")) return;
 
@@ -47,6 +74,15 @@ void checkValueCountRule(const QJsonObject& propObj, const QString& propName, Pr
     }
 }
 
+/*!
+ * \brief Внутренняя функция валидации правила "expected_value".
+ * * Проверяет, является ли значение непустым целочисленным массивом (размер до 100 элементов),
+ * где каждое число находится в диапазоне от 1 до 1000.
+ * * \param[in] propObj Текущий JSON-объект свойства.
+ * \param[in] propName Имя свойства.
+ * \param[out] prop Заполняемая структура свойства.
+ * \param[out] errors Контейнер ошибок.
+ */
 void checkExpectedValueRule(const QJsonObject& propObj, const QString& propName, Property& prop, QSet<Error>& errors) {
     if (!propObj.contains("expected_value")) return;
 
@@ -86,6 +122,17 @@ void checkExpectedValueRule(const QJsonObject& propObj, const QString& propName,
     }
 }
 
+/*!
+ * \brief Внутренняя функция валидации отдельного JSON-объекта свойства.
+ * * Проверяет отсутствие лишних полей, наличие обязательного поля "name", строковый тип имени,
+ * а также выявляет логическую неопределенность (когда заданы и "value_count", и "expected_value").
+ * * \param[in] propObj JSON-объект свойства для проверки.
+ * \param[in] index Порядковый индекс свойства в родительском массиве.
+ * \param[in] className Имя класса, содержащего данное свойство.
+ * \param[out] errors Ссылка на набор ошибок.
+ * \param[out] prop Выходная структура для сохранения извлеченных данных.
+ * \return \c true, если структура свойства валидна, иначе \c false.
+ */
 bool validatePropertyObject(const QJsonObject& propObj, int index, const QString& className, QSet<Error>& errors, Property& prop) {
     for (const QString& key : propObj.keys()) {
         if (key != "name" && key != "value_count" && key != "expected_value") {
@@ -117,6 +164,15 @@ bool validatePropertyObject(const QJsonObject& propObj, int index, const QString
     return true;
 }
 
+/*!
+ * \brief Внутренняя функция структурированной валидации одного объекта класса.
+ * * Проверяет наличие обязательных полей "class_name" и массива "properties",
+ * контролирует лимиты размеров и запускает валидацию вложенных свойств.
+ * * \param[in] classObj JSON-объект класса для проверки.
+ * \param[in] index Порядковый индекс класса в корневом массиве документов.
+ * \param[out] errors Набор ошибок.
+ * \param[out] parsedClasses Накопительный вектор распарсенных классов.
+ */
 void validateClassStructuredObject(const QJsonObject& classObj, int index, QSet<Error>& errors, QVector<Class>& parsedClasses) {
     for (const QString& key : classObj.keys()) {
         if (key != "class_name" && key != "properties") errors.insert(Error(ErrorType::extraField, key));
@@ -151,8 +207,14 @@ void validateClassStructuredObject(const QJsonObject& classObj, int index, QSet<
     parsedClasses.append(cls);
 }
 
+/*!
+ * \brief Точка входа для валидации входного JSON-документа.
+ * \param[in] rootObj Корневой объект JSON.
+ * \param[out] errors Контейнер для записи обнаруженных несоответствий схеме.
+ * \param[out] parsedClasses Контейнер для сохранения извлеченных структур данных.
+ * \return \c true, если документ полностью валиден, иначе \c false.
+ */
 bool validateInput(const QJsonObject& rootObj, QSet<Error>& errors, QVector<Class>& parsedClasses) {
-
     if (!rootObj.contains("classes") || !rootObj.value("classes").isArray()) {
         errors.insert(Error(ErrorType::emptyClassesArray));
         return false;
