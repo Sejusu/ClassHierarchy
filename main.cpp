@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
     validator jsonValidator;
 
     // Запуск семантической и структурной проверки данных
-    if (!jsonValidator.validateInput(jsonDoc.object(), errors, parsedClasses)) {
+    if (!validateInput(jsonDoc.object(), errors, parsedClasses)) {
         QTextStream out(stdout);
         for (const Error& err : errors) {
             out << err.generateErrorMessage() << Qt::endl;
@@ -76,8 +76,8 @@ int main(int argc, char *argv[]) {
     // Построение и оптимизация графа
     hierarchy hierarchyManager;
     ClassHierarchy hierarchy;
-    hierarchyManager.buildClassHierarchy(hierarchy, parsedClasses);
-    hierarchyManager.removeTransitiveEdges(hierarchy);
+    buildClassHierarchy(hierarchy, parsedClasses);
+    removeTransitiveEdges(hierarchy);
 
     // Экспорт результатов в формат Graphviz DOT
     QString dotContent = hierarchyManager.generateDot(hierarchy);
