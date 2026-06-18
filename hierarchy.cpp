@@ -65,8 +65,11 @@ bool isSubset(const ClassNode& A, const ClassNode& B) {
 void buildClassHierarchy(ClassHierarchy& hierarchy, const QVector<Class>& parsedClasses) {
     // Инициализация вершин графа и наборов правил свойств
     for (const Class& cls : parsedClasses) {
+        // Объявить узел класса
         ClassNode* node = new ClassNode(cls.name);
+        // Для каждого свойства
         for (const Property& prop : cls.properties) {
+            // Добавить правило вывода
             PropertyRule rule;
             rule.name = prop.name;
             rule.ruleType = prop.ruleType;
@@ -74,6 +77,7 @@ void buildClassHierarchy(ClassHierarchy& hierarchy, const QVector<Class>& parsed
             rule.expectedValues = prop.expectedValues.toList();
             node->properties.insert(rule);
         }
+        // Добавить в иерархию узел класса
         hierarchy.classes.insert(node);
     }
 
@@ -82,6 +86,7 @@ void buildClassHierarchy(ClassHierarchy& hierarchy, const QVector<Class>& parsed
         for (ClassNode* B : hierarchy.classes) {
             // Если класс А строго включает в себя все правила класса Б, между ними строится отношение наследования
             if (A->className != B->className && isSubset(*A, *B)) {
+                // Добавить класс Б в качестве связи с классом А
                 hierarchy.edges[A->className].append(B->className);
             }
         }
@@ -99,10 +104,12 @@ void removeTransitiveEdges(ClassHierarchy& hierarchy) {
     // Создание рабочей копии графа ребер
     QMap<QString, QList<QString>> optimizedEdges = hierarchy.edges;
 
+    // Для каждого класса А
     for (ClassNode* nodeA : hierarchy.classes) {
         QString A = nodeA->className;
         if (!hierarchy.edges.contains(A)) continue;
 
+        // Объявить список потомков
         QList<QString> currentChildren = hierarchy.edges[A];
 
         // Проверка каждого прямого потомка B на наличие собственных связей
