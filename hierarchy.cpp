@@ -36,15 +36,19 @@ bool matchProperty(const PropertyRule& rule, const PropertyRule& candidate) {
  * \return \c true, если класс \a A является подмножеством класса \a B, иначе \c false.
  */
 bool isSubset(const ClassNode& A, const ClassNode& B) {
+    // Если у базового класса нет ограничений — любой класс формально является его подмножеством
     if (A.properties.isEmpty()) return true;
+    // Проход по правилам класса А
     for (const PropertyRule& ruleA : A.properties) {
         bool found = false;
+        // Поиск эквивалентного правила соответствия в потенциальном базовом классе Б
         for (const PropertyRule& ruleB : B.properties) {
             if (matchProperty(ruleA, ruleB)) {
                 found = true;
                 break;
             }
         }
+        // Если хотя бы одно правило из Б не покрыто логикой класса А, отношение подмножества ложно
         if (!found) return false;
     }
     return true;
@@ -59,6 +63,7 @@ bool isSubset(const ClassNode& A, const ClassNode& B) {
  * \param[in] parsedClasses Вектор распарсенных и валидированных классов.
  */
 void buildClassHierarchy(ClassHierarchy& hierarchy, const QVector<Class>& parsedClasses) {
+    // Инициализация вершин графа и наборов правил свойств
     for (const Class& cls : parsedClasses) {
         ClassNode* node = new ClassNode(cls.name);
         for (const Property& prop : cls.properties) {
@@ -72,8 +77,10 @@ void buildClassHierarchy(ClassHierarchy& hierarchy, const QVector<Class>& parsed
         hierarchy.classes.insert(node);
     }
 
+    // Полный обход пар вершин для выявления отношений вложенности свойств
     for (ClassNode* A : hierarchy.classes) {
         for (ClassNode* B : hierarchy.classes) {
+            // Если класс А строго включает в себя все правила класса Б, между ними строится отношение наследования
             if (A->className != B->className && isSubset(*A, *B)) {
                 hierarchy.edges[A->className].append(B->className);
             }
@@ -89,6 +96,7 @@ void buildClassHierarchy(ClassHierarchy& hierarchy, const QVector<Class>& parsed
  * * \param[in,out] hierarchy Оптимизируемый объект иерархии.
  */
 void removeTransitiveEdges(ClassHierarchy& hierarchy) {
+    // Создание рабочей копии графа ребер
     QMap<QString, QList<QString>> optimizedEdges = hierarchy.edges;
 
     for (ClassNode* nodeA : hierarchy.classes) {
@@ -97,19 +105,24 @@ void removeTransitiveEdges(ClassHierarchy& hierarchy) {
 
         QList<QString> currentChildren = hierarchy.edges[A];
 
+        // Проверка каждого прямого потомка B на наличие собственных связей
         for (const QString& B : currentChildren) {
             if (A == B) continue;
 
+            // Если у класса Б есть свои наследники
             if (hierarchy.edges.contains(B)) {
                 const QList<QString>& bChildren = hierarchy.edges[B];
 
+                // Обход наследников «второго уровня»
                 for (const QString& C : bChildren) {
                     if (C == A || C == B) continue;
 
+                    // Если класс С достижим напрямую из А, прямая связь (A -> C) удаляется
                     if (currentChildren.contains(C)) {
                         bool isCyclicAC = hierarchy.edges.contains(C) && hierarchy.edges[C].contains(A);
                         bool isCyclicAB = hierarchy.edges.contains(B) && hierarchy.edges[B].contains(A);
 
+                        // Удаление избыточного ребра разрешено только при отсутствии циклов
                         if (!isCyclicAC && !isCyclicAB) {
                             optimizedEdges[A].removeOne(C);
                         }
@@ -119,6 +132,7 @@ void removeTransitiveEdges(ClassHierarchy& hierarchy) {
         }
     }
 
+    // Перенос оптимизированной структуры ребер обратно в итоговый граф
     hierarchy.edges = optimizedEdges;
 }
 
@@ -128,13 +142,17 @@ void removeTransitiveEdges(ClassHierarchy& hierarchy) {
  * \return Строка в формате DOT для визуализации (Graphviz).
  */
 QString hierarchy::generateDot(const ClassHierarchy& hierarchy) {
+    // Объявление направленного графа
     QString dot = "digraph G {\n";
+    // Проход по спискам смежности графа ребер
     for (auto it = hierarchy.edges.constBegin(); it != hierarchy.edges.constEnd(); ++it) {
         QString parent = it.key();
         for (const QString& child : it.value()) {
+            // Форматирование ребра в синтаксис: "Родитель" -> "Потомок"
             dot += QString("    \"%1\" -> \"%2\";\n").arg(parent, child);
         }
     }
     dot += "}\n";
+    // Вернуть DOT файл
     return dot;
 }

@@ -130,9 +130,11 @@ public:
      * * \return Строка с подробным описанием ошибки.
      */
     QString generateErrorMessage() const {
+        // Подготовка контекстных строк: подмена пустых значений базовыми строками
         QString propText = incorrectProperty.isEmpty() ? "(имя не указано)" : QString("'%1'").arg(incorrectProperty);
         QString pathText = filePath.isEmpty() ? "указанный файл" : QString("'%1'").arg(filePath);
 
+        // Статическая хэш-таблица шаблонов ошибок
         static const QMap<ErrorType, QString> errorTemplates = {
             {ErrorType::inputFileNotExist,          "Ошибка: Входной файл %1 не существует или недоступен для чтения."},
             {ErrorType::outputFileCreateFail,       "Ошибка: Не удалось создать выходной файл %1. Проверьте права доступа к директории."},
@@ -156,6 +158,7 @@ public:
             {ErrorType::extraField,                 "Ошибка валидации: Обнаружено лишнее поле %1."}
         };
 
+        // Обработка ошибок, связанных с недопустимыми символами
         if (type == ErrorType::invalidCharacters) {
             if (incorrectChar.isEmpty()) {
                 return QString("Ошибка: Поле наименования в объекте %1 должно быть строковым типом, а не числом/массивом/null.").arg(propText);
@@ -163,9 +166,11 @@ public:
             return QString("Ошибка: Наименование %1 содержит недопустимый символ '%2'. Разрешены только буквы (рус/англ), цифры, подчёркивание '_' и дефис '-'.").arg(propText).arg(incorrectChar);
         }
 
+        // Извлечение шаблона
         QString tmpl = errorTemplates.value(type, "Неизвестная критическая ошибка валидации структуры входных данных.");
         QString indexStr = incorrectSize > 0 ? QString::number(incorrectSize) : "(неизвестный индекс)";
 
+        // Каскадная подстановка аргументов в шаблон
         return tmpl.arg(pathText)
             .arg(propText)
             .arg(indexStr)

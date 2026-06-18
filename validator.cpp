@@ -215,6 +215,7 @@ void validateClassStructuredObject(const QJsonObject& classObj, int index, QSet<
  * \return \c true, если документ полностью валиден, иначе \c false.
  */
 bool validateInput(const QJsonObject& rootObj, QSet<Error>& errors, QVector<Class>& parsedClasses) {
+    // Проверка наличия и корректности типа корневого поля "classes"
     if (!rootObj.contains("classes") || !rootObj.value("classes").isArray()) {
         errors.insert(Error(ErrorType::emptyClassesArray));
         return false;
@@ -222,21 +223,26 @@ bool validateInput(const QJsonObject& rootObj, QSet<Error>& errors, QVector<Clas
 
     QJsonArray classesArray = rootObj.value("classes").toArray();
 
+    // Если массив классов пустой, вернуть ошибку emptyClassesArray
     if (classesArray.isEmpty()) {
         errors.insert(Error(ErrorType::emptyClassesArray));
         return false;
     }
 
+    // Если размер массива больше 100, вернуть ошибку tooManyClasses
     if (classesArray.size() > 100) {
         errors.insert(Error(ErrorType::tooManyClasses, "", "", 0, classesArray.size()));
         return false;
     }
 
+    // Для каждого класса
     for (int i = 0; i < classesArray.size(); ++i) {
+        // Проверить структуру класса
         if (classesArray.at(i).isObject()) {
             validateClassStructuredObject(classesArray.at(i).toObject(), i, errors, parsedClasses);
         }
     }
 
+    // Вернуть true - если массив errors пуст и false - если не пуст
     return errors.isEmpty();
 }
