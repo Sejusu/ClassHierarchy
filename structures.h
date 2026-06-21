@@ -25,7 +25,7 @@ enum class PropertyRuleType {
  */
 struct Property {
     QString name;                 /*!< Имя свойства (идентификатор). */
-    PropertyRuleType ruleType;    /*!< Тип правила валидации свойства. */
+    PropertyRuleType ruleType = PropertyRuleType::HasProperty;    /*!< Тип правила валидации свойства. */
     QVector<int> valueCount;      /*!< Ограничение количества: массив, всегда содержащий строго 1 элемент. */
     QVector<int> expectedValues;  /*!< Ожидаемые значения: массив размером от 1 до 100 элементов. */
 };
@@ -187,7 +187,7 @@ public:
 class PropertyRule {
 public:
     QString name;                 /*!< Имя свойства. */
-    PropertyRuleType ruleType;    /*!< Тип логического правила. */
+    PropertyRuleType ruleType = PropertyRuleType::HasProperty;    /*!< Тип логического правила. */
     QList<int> valueCount;        /*!< Ограничение на количество значений. */
     QList<int> expectedValues;    /*!< Список допустимых значений свойства. */
 

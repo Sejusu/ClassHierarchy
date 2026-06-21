@@ -15,15 +15,20 @@ hierarchy::hierarchy() {}
  * \return \c true, если правила идентичны/совместимы, иначе \c false.
  */
 bool matchProperty(const PropertyRule& rule, const PropertyRule& candidate) {
-    if (rule.name != candidate.name) return false;
-    if (rule.ruleType != candidate.ruleType) return false;
+    // Если название правила не совпадает с н.п.кандидата или тип правила не совпадает с т.п.кандидата
+    if (rule.name != candidate.name || rule.ruleType != candidate.ruleType) {
+        return false;
+    }
 
+    // Если правило - количество свойств, проверить равны ли valueCount у эталона и кандидата
     if (rule.ruleType == PropertyRuleType::HasPropertyWithCount) {
         return rule.valueCount == candidate.valueCount;
     }
+    // Если правило - заданное(ые) число(а), проверить равны ли ожидаемые числа у эталона и кандидата
     if (rule.ruleType == PropertyRuleType::HasPropertyWithValue || rule.ruleType == PropertyRuleType::HasPropertyWithValues) {
         return rule.expectedValues == candidate.expectedValues;
     }
+    // Вернуть true
     return true;
 }
 
