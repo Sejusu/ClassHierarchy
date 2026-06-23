@@ -117,10 +117,12 @@ public:
      * \return Вычисленное значение хэш-функции.
      */
     friend size_t qHash(const Error& key, size_t seed) {
-        return qHash(static_cast<int>(key.type), seed) ^
-               qHash(key.incorrectProperty, seed) ^
-               qHash(key.incorrectChar, seed) ^
-               qHash(key.incorrectValue, seed);
+        seed = qHash(static_cast<int>(key.type), seed);
+        seed = qHash(key.incorrectProperty, seed);
+        seed = qHash(key.incorrectChar, seed);
+        seed = qHash(key.incorrectValue, seed);
+        seed = qHash(key.incorrectSize, seed);
+        return qHash(key.filePath, seed);
     }
 
     /*!
