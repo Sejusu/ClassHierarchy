@@ -6,7 +6,23 @@
 #include <QTemporaryFile>
 #include <QSet>
 
+#include "validator.h"
 #include "structures.h"
+
+namespace QTest {
+char* toString(const Error& e)
+{
+    const QByteArray ba = QStringLiteral("Error{type=%1, prop='%2', char='%3', val=%4, size=%5, path='%6'}")
+    .arg(static_cast<int>(e.type))
+        .arg(e.incorrectProperty)
+        .arg(e.incorrectChar)
+        .arg(e.incorrectValue)
+        .arg(e.incorrectSize)
+        .arg(e.filePath)
+        .toUtf8();
+    return qstrdup(ba.constData());
+}
+} // namespace QTest
 
 // Прототипы тестируемых функций проекта
 bool validateInput(const QJsonObject& json, QSet<Error>& errors, QVector<Class>& parsedClasses);
@@ -132,11 +148,14 @@ private slots:
     /*! \brief Пустой список классов на входе: проверка инициализации пустой структуры. */
     void buildClassHierarchy_t5_emptyInput();
 
-    /*! \brief Циклическая зависимость (А содержит Б, Б содержит А): проверка устойчивости логики. */
+    /*! \brief Классы с одинаковым набором свойств: связь наследования не строится. */
     void buildClassHierarchy_t6_cyclicDependency();
 
-    /*! \brief Полный граф (каждый класс является подмножеством каждого): проверка генерации всех связей. */
+    /*! \brief Три независимых класса с разными свойствами: в графе только узлы, без рёбер. */
     void buildClassHierarchy_t7_fullGraph();
+
+    /*! \brief Дубликаты class_name в JSON: в графе остаётся одна вершина. */
+    void buildClassHierarchy_t8_duplicateClassName();
 
 
     /* ========================================================================
@@ -258,19 +277,6 @@ static QJsonObject parseJson(const QString& text) {
 }
 
 /*!
- * \brief Вспомогательный предикат для поиска типа ошибки в контейнере зафиксированных исключений.
- * \param[in] errors Множество обнаруженных в ходе валидации ошибок.
- * \param[in] type Искомый тип ошибки валидации.
- * \return \c true, если ошибка указанной категории присутствует в наборе, иначе \c false.
- */
-static bool hasError(const QSet<Error>& errors, ErrorType type) {
-    for (const auto& err : errors) {
-        if (err.type == type) return true;
-    }
-    return false;
-}
-
-/*!
  * \brief Вспомогательный предикат для верификации существования направленного ребра в графе таблицы смежности.
  * \param[in] hierarchy Объект иерархии (граф).
  * \param[in] from Имя вершины-источника (родитель).
@@ -281,6 +287,27 @@ static bool hasEdge(const ClassHierarchy& hierarchy, const QString& from, const 
     return hierarchy.edges.contains(from) && hierarchy.edges.value(from).contains(to);
 }
 
+static Property makeProperty(const QString& name,
+                             PropertyRuleType ruleType = PropertyRuleType::HasProperty,
+                             const QVector<int>& valueCount = {},
+                             const QVector<int>& expectedValues = {})
+{
+    Property prop;
+    prop.name = name;
+    prop.ruleType = ruleType;
+    prop.valueCount = valueCount;
+    prop.expectedValues = expectedValues;
+    return prop;
+}
+
+static Class makeClass(const QString& name, const QVector<Property>& properties)
+{
+    Class cls;
+    cls.name = name;
+    cls.properties = properties;
+    return cls;
+}
+
 // ============================================================================
 // РЕАЛИЗАЦИЯ ТЕСТОВ: Приложение 1. validateInput
 // ============================================================================
@@ -289,87 +316,113 @@ void test::validateInput_t1_emptyJson() {
     QJsonObject json = parseJson("{}");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    bool res = validateInput(json, errors, parsedClasses);
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
     QCOMPARE(res, false);
-    QVERIFY(hasError(errors, ErrorType::emptyClassesArray) || hasError(errors, ErrorType::extraField));
+    QSet<Error> expectedErrors = { Error(ErrorType::emptyClassesArray) };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t2_missingClasses() {
     QJsonObject json = parseJson("{ \"data\": [] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    bool res = validateInput(json, errors, parsedClasses);
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
     QCOMPARE(res, false);
-    QVERIFY(hasError(errors, ErrorType::emptyClassesArray) || hasError(errors, ErrorType::extraField));
+    QSet<Error> expectedErrors = {
+        Error(ErrorType::extraField, "data"),
+        Error(ErrorType::emptyClassesArray),
+    };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t3_emptyClassesArray() {
     QJsonObject json = parseJson("{ \"classes\": [] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    bool res = validateInput(json, errors, parsedClasses);
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
     QCOMPARE(res, false);
-    QVERIFY(hasError(errors, ErrorType::emptyClassesArray));
+    QSet<Error> expectedErrors = { Error(ErrorType::emptyClassesArray) };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t4_missingClassName() {
     QJsonObject json = parseJson("{ \"classes\": [ { \"properties\": [ { \"name\": \"size\" } ] } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    bool res = validateInput(json, errors, parsedClasses);
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
     QCOMPARE(res, false);
-    QVERIFY(hasError(errors, ErrorType::missingClassName));
+    QSet<Error> expectedErrors = { Error(ErrorType::missingClassName, "", "", 0, 1) };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t5_missingProperties() {
     QJsonObject json = parseJson("{ \"classes\": [ { \"class_name\": \"Device\" } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    bool res = validateInput(json, errors, parsedClasses);
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
     QCOMPARE(res, false);
-    QVERIFY(hasError(errors, ErrorType::missingProperties));
+    QSet<Error> expectedErrors = { Error(ErrorType::missingProperties, "Device") };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t6_emptyProperties() {
     QJsonObject json = parseJson("{ \"classes\": [ { \"class_name\": \"Device\", \"properties\": [] } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    bool res = validateInput(json, errors, parsedClasses);
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
     QCOMPARE(res, false);
-    QVERIFY(hasError(errors, ErrorType::emptyProperties) || !errors.isEmpty());
+    QSet<Error> expectedErrors = { Error(ErrorType::emptyProperties, "Device") };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t7_missingPropertyName() {
     QJsonObject json = parseJson("{ \"classes\": [ { \"class_name\": \"Device\", \"properties\": [ { \"value_count\": [2] } ] } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    bool res = validateInput(json, errors, parsedClasses);
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
     QCOMPARE(res, false);
-    QVERIFY(hasError(errors, ErrorType::missingPropertyName));
+    QSet<Error> expectedErrors = { Error(ErrorType::missingPropertyName, "Device", "", 0, 1) };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t8_ambiguousRule() {
     QJsonObject json = parseJson("{ \"classes\": [ { \"class_name\": \"Device\", \"properties\": [ { \"name\": \"size\", \"value_count\": [2], \"expected_value\": [1,2] } ] } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::ambiguousRule));
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = { Error(ErrorType::ambiguousRule, "size") };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t9_extraField() {
     QJsonObject json = parseJson("{ \"classes\": [ { \"class_name\": \"Device\", \"abc\": 10, \"properties\": [ { \"name\": \"size\" } ] } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::extraField));
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = { Error(ErrorType::extraField, "abc") };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t10_invalidCharactersInClassName() {
     QJsonObject json = parseJson("{ \"classes\": [ { \"class_name\": \"Device!!!\", \"properties\": [ { \"name\": \"size\" } ] } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::invalidCharacters));
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = { Error(ErrorType::invalidCharacters, "Device!!!", "!") };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t11_tooManyClasses() {
@@ -387,24 +440,36 @@ void test::validateInput_t11_tooManyClasses() {
 
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::tooManyClasses));
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = { Error(ErrorType::tooManyClasses, "", "", 0, 102) };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t12_invalidClassNameType() {
     QJsonObject json = parseJson("{\"classes\": [ { \"class_name\": 123, \"properties\": [ { \"name\": \"size\" } ] } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::invalidCharacters));
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = { Error(ErrorType::invalidCharacters, QStringLiteral("класса №1")) };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t13_emptyClassNameLength() {
     QJsonObject json = parseJson("{\"classes\": [ { \"class_name\": \"\", \"properties\": [ { \"name\": \"size\" } ] } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::invalidClassNameLength));
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = {
+        Error(ErrorType::invalidClassNameLength, "", "", 0, 0),
+        Error(ErrorType::invalidCharacters, "", ""),
+    };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t14_exceededClassNameLength() {
@@ -420,16 +485,22 @@ void test::validateInput_t14_exceededClassNameLength() {
 
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::invalidClassNameLength));
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = { Error(ErrorType::invalidClassNameLength, longName, "", 0, 256) };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t15_invalidPropertiesType() {
     QJsonObject json = parseJson("{\"classes\": [ { \"class_name\": \"Device\", \"properties\": \"not_an_array\" } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::missingProperties) || !errors.isEmpty());
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = { Error(ErrorType::missingProperties, "Device") };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t16_tooManyProperties() {
@@ -447,48 +518,69 @@ void test::validateInput_t16_tooManyProperties() {
 
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::tooManyProperties));
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = { Error(ErrorType::tooManyProperties, "Device", "", 0, 102) };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t17_invalidPropertyNameType() {
     QJsonObject json = parseJson("{\"classes\": [ { \"class_name\": \"Device\", \"properties\": [ { \"name\": true } ] } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::invalidCharacters));
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = { Error(ErrorType::invalidCharacters, QStringLiteral("свойства №1 в классе Device")) };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t18_emptyPropertyNameLength() {
     QJsonObject json = parseJson("{\"classes\": [ { \"class_name\": \"Device\", \"properties\": [ { \"name\": \"\" } ] } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::invalidPropertyNameLength));
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = {
+        Error(ErrorType::invalidPropertyNameLength, "", "", 0, 0),
+        Error(ErrorType::invalidCharacters, "", ""),
+    };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t19_invalidValueCountType() {
     QJsonObject json = parseJson("{\"classes\": [ { \"class_name\": \"Device\", \"properties\": [ { \"name\": \"p\", \"value_count\": \"three\" } ] } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::invalidValueCountType));
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = { Error(ErrorType::invalidValueCountType, "p") };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t20_valueCountOutOfRange() {
     QJsonObject json = parseJson("{\"classes\": [ { \"class_name\": \"Device\", \"properties\": [ { \"name\": \"p\", \"value_count\": [1500] } ] } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::invalidValueRange));
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = { Error(ErrorType::invalidValueRange, "p", "", 1500) };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t21_emptyExpectedValue() {
     QJsonObject json = parseJson("{\"classes\": [ { \"class_name\": \"Device\", \"properties\": [ { \"name\": \"p\", \"expected_value\": [] } ] } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::emptyExpectedValue));
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = { Error(ErrorType::emptyExpectedValue, "p") };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t22_tooManyExpectedValues() {
@@ -505,62 +597,51 @@ void test::validateInput_t22_tooManyExpectedValues() {
 
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::tooManyExpectedValues));
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = { Error(ErrorType::tooManyExpectedValues, "p", "", 0, 102) };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 void test::validateInput_t23_expectedValueNotANumber() {
     QJsonObject json = parseJson("{\"classes\": [ { \"class_name\": \"Device\", \"properties\": [ { \"name\": \"p\", \"expected_value\": [1, \"two\", 3] } ] } ] }");
     QSet<Error> errors;
     QVector<Class> parsedClasses;
-    validateInput(json, errors, parsedClasses);
-    QVERIFY(hasError(errors, ErrorType::invalidValueType));
+    validator v;
+    bool res = v.validateInput(json, errors, parsedClasses);
+    QCOMPARE(res, false);
+    QSet<Error> expectedErrors = { Error(ErrorType::invalidValueType, "p") };
+    QVERIFY((expectedErrors - errors) == QSet<Error>());
 }
 
 // ============================================================================
-// РЕАЛИЗАЦИЯ ТЕСТОВ: Приложение 2. buildClassHierarchy
+// РЕАЛИЗАЦИЯ ТЕСТОВ: buildClassHierarchy
 // ============================================================================
 
 void test::buildClassHierarchy_t1_simpleInheritance() {
     ClassHierarchy hierarchy;
-    QVector<Class> dummyParsedClasses;
+    QVector<Class> parsedClasses = {
+                                    makeClass("Device", { makeProperty("power") }),
+                                    makeClass("SmartDevice", { makeProperty("power"), makeProperty("wifi") }),
+                                    };
 
-    ClassNode* nodeA = new ClassNode("Device");
-    nodeA->properties.insert(PropertyRule{"power", PropertyRuleType::HasProperty, {}, {}});
+    buildClassHierarchy(hierarchy, parsedClasses);
 
-    ClassNode* nodeB = new ClassNode("SmartDevice");
-    nodeB->properties.insert(PropertyRule{"power", PropertyRuleType::HasProperty, {}, {}});
-    nodeB->properties.insert(PropertyRule{"wifi", PropertyRuleType::HasProperty, {}, {}});
-
-    hierarchy.classes.insert(nodeA);
-    hierarchy.classes.insert(nodeB);
-
-    buildClassHierarchy(hierarchy, dummyParsedClasses);
-
+    QCOMPARE(hierarchy.classes.size(), 2);
     QVERIFY(hasEdge(hierarchy, "Device", "SmartDevice"));
+    QCOMPARE(hasEdge(hierarchy, "SmartDevice", "Device"), false);
 }
 
 void test::buildClassHierarchy_t2_multilevelHierarchy() {
     ClassHierarchy hierarchy;
-    QVector<Class> dummyParsedClasses;
+    QVector<Class> parsedClasses = {
+                                    makeClass("A", { makeProperty("x") }),
+                                    makeClass("B", { makeProperty("x"), makeProperty("y") }),
+                                    makeClass("C", { makeProperty("x"), makeProperty("y"), makeProperty("z") }),
+                                    };
 
-    ClassNode* nodeA = new ClassNode("A");
-    nodeA->properties.insert(PropertyRule{"x", PropertyRuleType::HasProperty, {}, {}});
-
-    ClassNode* nodeB = new ClassNode("B");
-    nodeB->properties.insert(PropertyRule{"x", PropertyRuleType::HasProperty, {}, {}});
-    nodeB->properties.insert(PropertyRule{"y", PropertyRuleType::HasProperty, {}, {}});
-
-    ClassNode* nodeC = new ClassNode("C");
-    nodeC->properties.insert(PropertyRule{"x", PropertyRuleType::HasProperty, {}, {}});
-    nodeC->properties.insert(PropertyRule{"y", PropertyRuleType::HasProperty, {}, {}});
-    nodeC->properties.insert(PropertyRule{"z", PropertyRuleType::HasProperty, {}, {}});
-
-    hierarchy.classes.insert(nodeA);
-    hierarchy.classes.insert(nodeB);
-    hierarchy.classes.insert(nodeC);
-
-    buildClassHierarchy(hierarchy, dummyParsedClasses);
+    buildClassHierarchy(hierarchy, parsedClasses);
 
     QVERIFY(hasEdge(hierarchy, "A", "B"));
     QVERIFY(hasEdge(hierarchy, "B", "C"));
@@ -569,48 +650,28 @@ void test::buildClassHierarchy_t2_multilevelHierarchy() {
 
 void test::buildClassHierarchy_t3_independentClasses() {
     ClassHierarchy hierarchy;
-    QVector<Class> dummyParsedClasses;
+    QVector<Class> parsedClasses = {
+                                    makeClass("A", { makeProperty("x") }),
+                                    makeClass("B", { makeProperty("y") }),
+                                    };
 
-    ClassNode* nodeA = new ClassNode("A");
-    nodeA->properties.insert(PropertyRule{"x", PropertyRuleType::HasProperty, {}, {}});
+    buildClassHierarchy(hierarchy, parsedClasses);
 
-    ClassNode* nodeB = new ClassNode("B");
-    nodeB->properties.insert(PropertyRule{"y", PropertyRuleType::HasProperty, {}, {}});
-
-    hierarchy.classes.insert(nodeA);
-    hierarchy.classes.insert(nodeB);
-
-    buildClassHierarchy(hierarchy, dummyParsedClasses);
-
-    QVERIFY(hierarchy.edges.isEmpty());
+    QCOMPARE(hierarchy.classes.size(), 2);
+    QCOMPARE(hasEdge(hierarchy, "A", "B"), false);
+    QCOMPARE(hasEdge(hierarchy, "B", "A"), false);
 }
 
 void test::buildClassHierarchy_t4_diamondHierarchy() {
     ClassHierarchy hierarchy;
-    QVector<Class> dummyParsedClasses;
+    QVector<Class> parsedClasses = {
+                                    makeClass("A", { makeProperty("x") }),
+                                    makeClass("B", { makeProperty("x"), makeProperty("y") }),
+                                    makeClass("C", { makeProperty("x"), makeProperty("z") }),
+                                    makeClass("D", { makeProperty("x"), makeProperty("y"), makeProperty("z") }),
+                                    };
 
-    ClassNode* nodeA = new ClassNode("A");
-    nodeA->properties.insert(PropertyRule{"x", PropertyRuleType::HasProperty, {}, {}});
-
-    ClassNode* nodeB = new ClassNode("B");
-    nodeB->properties.insert(PropertyRule{"x", PropertyRuleType::HasProperty, {}, {}});
-    nodeB->properties.insert(PropertyRule{"y", PropertyRuleType::HasProperty, {}, {}});
-
-    ClassNode* nodeC = new ClassNode("C");
-    nodeC->properties.insert(PropertyRule{"x", PropertyRuleType::HasProperty, {}, {}});
-    nodeC->properties.insert(PropertyRule{"z", PropertyRuleType::HasProperty, {}, {}});
-
-    ClassNode* nodeD = new ClassNode("D");
-    nodeD->properties.insert(PropertyRule{"x", PropertyRuleType::HasProperty, {}, {}});
-    nodeD->properties.insert(PropertyRule{"y", PropertyRuleType::HasProperty, {}, {}});
-    nodeD->properties.insert(PropertyRule{"z", PropertyRuleType::HasProperty, {}, {}});
-
-    hierarchy.classes.insert(nodeA);
-    hierarchy.classes.insert(nodeB);
-    hierarchy.classes.insert(nodeC);
-    hierarchy.classes.insert(nodeD);
-
-    buildClassHierarchy(hierarchy, dummyParsedClasses);
+    buildClassHierarchy(hierarchy, parsedClasses);
 
     QVERIFY(hasEdge(hierarchy, "A", "B"));
     QVERIFY(hasEdge(hierarchy, "A", "C"));
@@ -621,53 +682,61 @@ void test::buildClassHierarchy_t4_diamondHierarchy() {
 
 void test::buildClassHierarchy_t5_emptyInput() {
     ClassHierarchy hierarchy;
-    QVector<Class> dummyParsedClasses;
-    buildClassHierarchy(hierarchy, dummyParsedClasses);
+    QVector<Class> parsedClasses;
+    buildClassHierarchy(hierarchy, parsedClasses);
     QVERIFY(hierarchy.classes.isEmpty());
     QVERIFY(hierarchy.edges.isEmpty());
 }
 
 void test::buildClassHierarchy_t6_cyclicDependency() {
     ClassHierarchy hierarchy;
-    QVector<Class> dummyParsedClasses;
+    QVector<Class> parsedClasses = {
+                                    makeClass("A", { makeProperty("x") }),
+                                    makeClass("B", { makeProperty("x") }),
+                                    };
 
-    ClassNode* nodeA = new ClassNode("A");
-    nodeA->properties.insert(PropertyRule{"x", PropertyRuleType::HasProperty, {}, {}});
+    buildClassHierarchy(hierarchy, parsedClasses);
 
-    ClassNode* nodeB = new ClassNode("B");
-    nodeB->properties.insert(PropertyRule{"x", PropertyRuleType::HasProperty, {}, {}});
-
-    hierarchy.classes.insert(nodeA);
-    hierarchy.classes.insert(nodeB);
-
-    buildClassHierarchy(hierarchy, dummyParsedClasses);
-    QVERIFY(hasEdge(hierarchy, "A", "B"));
-    QVERIFY(hasEdge(hierarchy, "B", "A"));
+    QCOMPARE(hierarchy.classes.size(), 2);
+    QCOMPARE(hasEdge(hierarchy, "A", "B"), false);
+    QCOMPARE(hasEdge(hierarchy, "B", "A"), false);
 }
 
 void test::buildClassHierarchy_t7_fullGraph() {
     ClassHierarchy hierarchy;
-    QVector<Class> dummyParsedClasses;
+    QVector<Class> parsedClasses = {
+                                    makeClass("A", { makeProperty("x") }),
+                                    makeClass("B", { makeProperty("y") }),
+                                    makeClass("C", { makeProperty("z") }),
+                                    };
 
-    ClassNode* nodeA = new ClassNode("A");
-    ClassNode* nodeB = new ClassNode("B");
-    ClassNode* nodeC = new ClassNode("C");
+    buildClassHierarchy(hierarchy, parsedClasses);
 
-    hierarchy.classes.insert(nodeA);
-    hierarchy.classes.insert(nodeB);
-    hierarchy.classes.insert(nodeC);
+    QCOMPARE(hierarchy.classes.size(), 3);
+    QCOMPARE(hasEdge(hierarchy, "A", "B"), false);
+    QCOMPARE(hasEdge(hierarchy, "A", "C"), false);
+    QCOMPARE(hasEdge(hierarchy, "B", "A"), false);
+    QCOMPARE(hasEdge(hierarchy, "B", "C"), false);
+    QCOMPARE(hasEdge(hierarchy, "C", "A"), false);
+    QCOMPARE(hasEdge(hierarchy, "C", "B"), false);
+}
 
-    buildClassHierarchy(hierarchy, dummyParsedClasses);
-    QVERIFY(hasEdge(hierarchy, "A", "B"));
-    QVERIFY(hasEdge(hierarchy, "A", "C"));
-    QVERIFY(hasEdge(hierarchy, "B", "A"));
-    QVERIFY(hasEdge(hierarchy, "B", "C"));
-    QVERIFY(hasEdge(hierarchy, "C", "A"));
-    QVERIFY(hasEdge(hierarchy, "C", "B"));
+void test::buildClassHierarchy_t8_duplicateClassName() {
+    ClassHierarchy hierarchy;
+    QVector<Class> parsedClasses = {
+                                    makeClass("A", { makeProperty("x") }),
+                                    makeClass("A", { makeProperty("x") }),
+                                    };
+
+    buildClassHierarchy(hierarchy, parsedClasses);
+
+    QCOMPARE(hierarchy.classes.size(), 1);
+    QCOMPARE(hierarchy.edges.size(), 1);
+    QCOMPARE(hasEdge(hierarchy, "A", "A"), false);
 }
 
 // ============================================================================
-// РЕАЛИЗАЦИЯ ТЕСТОВ: Приложение 3. removeTransitiveEdges
+// РЕАЛИЗАЦИЯ ТЕСТОВ: removeTransitiveEdges
 // ============================================================================
 
 void test::removeTransitiveEdges_t1_removal() {
@@ -766,6 +835,10 @@ void test::removeTransitiveEdges_t6_longLinearChain() {
     QCOMPARE(hasEdge(hierarchy, "B", "E"), false);
     QCOMPARE(hasEdge(hierarchy, "C", "E"), false);
 }
+
+// ============================================================================
+// РЕАЛИЗАЦИЯ ТЕСТОВ: removeTransitiveEdges (Продолжение)
+// ============================================================================
 
 void test::removeTransitiveEdges_t7_loopSize2() {
     ClassHierarchy hierarchy;
@@ -889,10 +962,6 @@ void test::removeTransitiveEdges_t14_disconnectedSubgraphs() {
     QVERIFY(hasEdge(hierarchy, "A2", "B2"));
 }
 
-// ============================================================================
-// РЕАЛИЗАЦИЯ ТЕСТОВ: Приложение 4. isSubset
-// ============================================================================
-
 void test::isSubset_t1_fullMatch() {
     ClassNode nodeA("DeviceA");
     nodeA.properties.insert(PropertyRule{"power", PropertyRuleType::HasProperty, {}, {}});
@@ -981,7 +1050,7 @@ void test::isSubset_t8_expectedValueMismatch() {
 }
 
 // ============================================================================
-// РЕАЛИЗАЦИЯ ТЕСТОВ: Приложение 5. matchProperty
+// РЕАЛИЗАЦИЯ ТЕСТОВ: matchProperty
 // ============================================================================
 
 void test::matchProperty_t1_simplePropertyMatch() {
@@ -1032,7 +1101,6 @@ void test::matchProperty_t8_expectedValueArrayMismatch() {
     QCOMPARE(matchProperty(rule, candidate), false);
 }
 
-// Макрос Qt, создающий функцию main() для консольного запуска тестов
 QTEST_APPLESS_MAIN(test)
 
 #include "tst_test.moc"
