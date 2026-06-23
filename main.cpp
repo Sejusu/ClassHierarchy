@@ -7,6 +7,10 @@
 #include "structures.h"
 #include "validator.h"
 #include "hierarchy.h"
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 
 /*!
  * \brief Точка входа в консольное приложение.
@@ -18,6 +22,10 @@
  * \return Код завершения программы: \c 0 — успешное выполнение, \c 1 — критическая ошибка.
  */
 int main(int argc, char *argv[]) {
+    #ifdef _WIN32
+        SetConsoleCP(65001);       // Устанавливает кодировку ввода в UTF-8
+        SetConsoleOutputCP(65001); // Устанавливает кодировку вывода в UTF-8
+    #endif
     QCoreApplication a(argc, argv);
 
     // Проверка наличия обязательных аргументов командной строки
