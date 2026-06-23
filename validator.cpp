@@ -236,7 +236,14 @@ void validateClassStructuredObject(const QJsonObject& classObj, int index, QSet<
  * \param[out] parsedClasses Контейнер для сохранения извлеченных структур данных.
  * \return \c true, если документ полностью валиден, иначе \c false.
  */
-bool validateInput(const QJsonObject& rootObj, QSet<Error>& errors, QVector<Class>& parsedClasses) {
+bool validator::validateInput(const QJsonObject& rootObj, QSet<Error>& errors, QVector<Class>& parsedClasses) {
+    // Проверить наличие лишних полей на самом верхнем уровне
+    for (const QString& key : rootObj.keys()) {
+        if (key != "classes") {
+            errors.insert(Error(ErrorType::extraField, key));
+        }
+    }
+
     // Проверка наличия и корректности типа корневого поля "classes"
     if (!rootObj.contains("classes") || !rootObj.value("classes").isArray()) {
         errors.insert(Error(ErrorType::emptyClassesArray));
