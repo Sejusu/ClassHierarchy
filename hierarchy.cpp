@@ -19,7 +19,6 @@ bool matchProperty(const PropertyRule& rule, const PropertyRule& candidate) {
     if (rule.name != candidate.name || rule.ruleType != candidate.ruleType) {
         return false;
     }
-
     // Если правило - количество свойств, проверить равны ли valueCount у эталона и кандидата
     if (rule.ruleType == PropertyRuleType::HasPropertyWithCount) {
         return rule.valueCount == candidate.valueCount;
@@ -41,9 +40,7 @@ bool matchProperty(const PropertyRule& rule, const PropertyRule& candidate) {
  * \return \c true, если класс \a A является подмножеством класса \a B, иначе \c false.
  */
 bool isSubset(const ClassNode& A, const ClassNode& B) {
-    // Если у базового класса нет ограничений — любой класс формально является его подмножеством
-    if (A.properties.isEmpty()) return true;
-    // Проход по правилам класса А
+    if (A.properties.isEmpty() || B.properties.isEmpty()) return false;
     for (const PropertyRule& ruleA : A.properties) {
         bool found = false;
         // Поиск эквивалентного правила соответствия в потенциальном базовом классе Б
@@ -68,9 +65,12 @@ bool isSubset(const ClassNode& A, const ClassNode& B) {
  * \param[in] parsedClasses Вектор распарсенных и валидированных классов.
  */
 void buildClassHierarchy(ClassHierarchy& hierarchy, const QVector<Class>& parsedClasses) {
-    // Инициализация вершин графа и наборов правил свойств
+    QSet<QString> addedClassNames;
+
     for (const Class& cls : parsedClasses) {
-        // Объявить узел класса
+        if (addedClassNames.contains(cls.name)) continue;
+        addedClassNames.insert(cls.name);
+
         ClassNode* node = new ClassNode(cls.name);
         // Для каждого свойства
         for (const Property& prop : cls.properties) {
@@ -84,14 +84,21 @@ void buildClassHierarchy(ClassHierarchy& hierarchy, const QVector<Class>& parsed
         }
         // Добавить в иерархию узел класса
         hierarchy.classes.insert(node);
+
+        if (!hierarchy.edges.contains(cls.name)) {
+            hierarchy.edges[cls.name] = QList<QString>();
+        }
+
     }
 
     // Полный обход пар вершин для выявления отношений вложенности свойств
     for (ClassNode* A : hierarchy.classes) {
         for (ClassNode* B : hierarchy.classes) {
-            // Если класс А строго включает в себя все правила класса Б, между ними строится отношение наследования
-            if (A->className != B->className && isSubset(*A, *B)) {
-                // Добавить класс Б в качестве связи с классом А
+            if (A->className == B->className) continue;
+            if (A->properties.isEmpty() || B->properties.isEmpty()) continue;
+            if (A->properties.size() >= B->properties.size()) continue;
+
+            if (isSubset(*A, *B)) {
                 hierarchy.edges[A->className].append(B->className);
             }
         }
@@ -112,7 +119,6 @@ void removeTransitiveEdges(ClassHierarchy& hierarchy) {
     // Для каждого класса А
     for (ClassNode* nodeA : hierarchy.classes) {
         QString A = nodeA->className;
-        if (!hierarchy.edges.contains(A)) continue;
 
         // Объявить список потомков
         QList<QString> currentChildren = hierarchy.edges[A];
@@ -153,26 +159,28 @@ void removeTransitiveEdges(ClassHierarchy& hierarchy) {
  * \param[in] hierarchy Объект иерархии.
  * \return Строка в формате DOT для визуализации (Graphviz).
  */
+/*!
+ * \brief Формирует выходное представление графа в синтаксисе языка описания DOT.
+ * \param[in] hierarchy Объект иерархии.
+ * \return Строка в формате DOT для визуализации (Graphviz).
+ */
 QString hierarchy::generateDot(const ClassHierarchy& hierarchy) {
-    // Добавить строку "digraph G{"
     QString dot = "digraph G {\n";
 
-    // Для каждого класса, добавить класс в граф
+    // 1. СНАЧАЛА выводим все классы как одиночные узлы.
+    // Это заставит независимые классы появиться на схеме!
     for (ClassNode* node : hierarchy.classes) {
         dot += QString("    \"%1\";\n").arg(node->className);
     }
 
-    // Для каждой связи
+    // 2. ЗАТЕМ выводим стрелочки связей (если они есть)
     for (auto it = hierarchy.edges.constBegin(); it != hierarchy.edges.constEnd(); ++it) {
         QString parent = it.key();
-        // Для каждого ребенка
         for (const QString& child : it.value()) {
-            // Добавить связь родитель->ребенок
             dot += QString("    \"%1\" -> \"%2\";\n").arg(parent, child);
         }
     }
-    // Завершить граф строкой "}"
+
     dot += "}\n";
-    // Вернуть граф
     return dot;
 }
