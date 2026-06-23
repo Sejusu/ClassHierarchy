@@ -30,7 +30,7 @@ static bool isValidName(const QString& name) {
  * \param[in] isClass Флаг сущности: \c true — проверяется имя класса, \c false — имя свойства.
  * \return \c true, если имя прошло все проверки, иначе \c false.
  */
-bool checkStringCharacters(const QString& name, const QString& contextError, QSet<Error>& errors, bool isClass = true) {
+bool checkStringCharacters(const QString& name, const QString& contextError, QSet<Error>& errors, bool isClass) {
     // Анализ соответствия длины переданной строки (255 знаков)
     if (name.isEmpty() || name.length() > 255) {
         ErrorType lengthError = isClass ? ErrorType::invalidClassNameLength
