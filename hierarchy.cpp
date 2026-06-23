@@ -165,22 +165,38 @@ void removeTransitiveEdges(ClassHierarchy& hierarchy) {
  * \return Строка в формате DOT для визуализации (Graphviz).
  */
 QString hierarchy::generateDot(const ClassHierarchy& hierarchy) {
+    // Добавить строку "digraph G {"
     QString dot = "digraph G {\n";
 
-    // 1. СНАЧАЛА выводим все классы как одиночные узлы.
-    // Это заставит независимые классы появиться на схеме!
-    for (ClassNode* node : hierarchy.classes) {
-        dot += QString("    \"%1\";\n").arg(node->className);
-    }
-
-    // 2. ЗАТЕМ выводим стрелочки связей (если они есть)
+    // Объявить множество неизолированных классов
+    QSet<QString> connectedClasses;
+    // Для каждой связи
     for (auto it = hierarchy.edges.constBegin(); it != hierarchy.edges.constEnd(); ++it) {
-        QString parent = it.key();
+        // Для каждого потомка
         for (const QString& child : it.value()) {
-            dot += QString("    \"%1\" -> \"%2\";\n").arg(parent, child);
+            // Добавить родителя и потомка
+            connectedClasses.insert(it.key());
+            connectedClasses.insert(child);
         }
     }
-
+    // Для каждого класса
+    for (ClassNode* node : hierarchy.classes) {
+        // Если неизолированные классы не содержат имя класса
+        if (!connectedClasses.contains(node->className)) {
+            // Добавить название класса
+            dot += QString("    \"%1\";\n").arg(node->className);
+        }
+    }
+    // Для каждой связи
+    for (auto it = hierarchy.edges.constBegin(); it != hierarchy.edges.constEnd(); ++it) {
+        // Для каждого потомка
+        for (const QString& child : it.value()) {
+            // Добавить строку "родитель->потомок"
+            dot += QString("    \"%1\" -> \"%2\";\n").arg(it.key(), child);
+        }
+    }
+    // Добавить строку "}"
     dot += "}\n";
+    // Вернуть dot
     return dot;
 }
