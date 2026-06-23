@@ -154,17 +154,25 @@ void removeTransitiveEdges(ClassHierarchy& hierarchy) {
  * \return Строка в формате DOT для визуализации (Graphviz).
  */
 QString hierarchy::generateDot(const ClassHierarchy& hierarchy) {
-    // Объявление направленного графа
+    // Добавить строку "digraph G{"
     QString dot = "digraph G {\n";
-    // Проход по спискам смежности графа ребер
+
+    // Для каждого класса, добавить класс в граф
+    for (ClassNode* node : hierarchy.classes) {
+        dot += QString("    \"%1\";\n").arg(node->className);
+    }
+
+    // Для каждой связи
     for (auto it = hierarchy.edges.constBegin(); it != hierarchy.edges.constEnd(); ++it) {
         QString parent = it.key();
+        // Для каждого ребенка
         for (const QString& child : it.value()) {
-            // Форматирование ребра в синтаксис: "Родитель" -> "Потомок"
+            // Добавить связь родитель->ребенок
             dot += QString("    \"%1\" -> \"%2\";\n").arg(parent, child);
         }
     }
+    // Завершить граф строкой "}"
     dot += "}\n";
-    // Вернуть DOT файл
+    // Вернуть граф
     return dot;
 }
