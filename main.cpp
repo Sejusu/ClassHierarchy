@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
     validator jsonValidator;
 
     // Запуск семантической и структурной проверки данных
-    if (!validateInput(jsonDoc.object(), errors, parsedClasses)) {
+    if (!jsonValidator.validateInput(jsonDoc.object(), errors, parsedClasses)) {
         QTextStream out(stdout);
         for (const Error& err : errors) {
             out << err.generateErrorMessage() << Qt::endl;
