@@ -18,5 +18,6 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 
 HEADERS += \
     hierarchy.h \
+    mainpage.h \
     structures.h \
     validator.h
