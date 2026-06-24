@@ -277,7 +277,7 @@ static QJsonObject parseJson(const QString& text) {
 }
 
 /*!
- * \brief Вспомогательный предикат для верификации существования направленного ребра в графе таблицы смежности.
+ * \brief Вспомогательный метод для верификации существования направленного ребра в графе таблицы смежности.
  * \param[in] hierarchy Объект иерархии (граф).
  * \param[in] from Имя вершины-источника (родитель).
  * \param[in] to Имя вершины-приемника (потомок).
@@ -285,6 +285,16 @@ static QJsonObject parseJson(const QString& text) {
  */
 static bool hasEdge(const ClassHierarchy& hierarchy, const QString& from, const QString& to) {
     return hierarchy.edges.contains(from) && hierarchy.edges.value(from).contains(to);
+}
+
+/*!
+ * \brief Вспомогательный метод для проверки наличия узла класса в графе.
+ */
+static bool hasNode(const ClassHierarchy& hierarchy, const QString& name) {
+    for (ClassNode* node : hierarchy.classes) {
+        if (node->className == name) return true;
+    }
+    return false;
 }
 
 static Property makeProperty(const QString& name,
@@ -321,6 +331,7 @@ void test::validateInput_t1_emptyJson() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::emptyClassesArray) };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t2_missingClasses() {
@@ -335,6 +346,7 @@ void test::validateInput_t2_missingClasses() {
         Error(ErrorType::emptyClassesArray),
     };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t3_emptyClassesArray() {
@@ -346,6 +358,7 @@ void test::validateInput_t3_emptyClassesArray() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::emptyClassesArray) };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t4_missingClassName() {
@@ -357,6 +370,7 @@ void test::validateInput_t4_missingClassName() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::missingClassName, "", "", 0, 1) };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t5_missingProperties() {
@@ -368,6 +382,7 @@ void test::validateInput_t5_missingProperties() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::missingProperties, "Device") };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t6_emptyProperties() {
@@ -379,6 +394,7 @@ void test::validateInput_t6_emptyProperties() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::emptyProperties, "Device") };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t7_missingPropertyName() {
@@ -390,6 +406,7 @@ void test::validateInput_t7_missingPropertyName() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::missingPropertyName, "Device", "", 0, 1) };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t8_ambiguousRule() {
@@ -401,6 +418,7 @@ void test::validateInput_t8_ambiguousRule() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::ambiguousRule, "size") };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t9_extraField() {
@@ -412,6 +430,7 @@ void test::validateInput_t9_extraField() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::extraField, "abc") };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t10_invalidCharactersInClassName() {
@@ -423,6 +442,7 @@ void test::validateInput_t10_invalidCharactersInClassName() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::invalidCharacters, "Device!!!", "!") };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t11_tooManyClasses() {
@@ -445,6 +465,7 @@ void test::validateInput_t11_tooManyClasses() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::tooManyClasses, "", "", 0, 102) };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t12_invalidClassNameType() {
@@ -456,6 +477,7 @@ void test::validateInput_t12_invalidClassNameType() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::invalidCharacters, QStringLiteral("класса №1")) };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t13_emptyClassNameLength() {
@@ -470,6 +492,7 @@ void test::validateInput_t13_emptyClassNameLength() {
         Error(ErrorType::invalidCharacters, "", ""),
     };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t14_exceededClassNameLength() {
@@ -490,6 +513,7 @@ void test::validateInput_t14_exceededClassNameLength() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::invalidClassNameLength, longName, "", 0, 256) };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t15_invalidPropertiesType() {
@@ -501,6 +525,7 @@ void test::validateInput_t15_invalidPropertiesType() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::missingProperties, "Device") };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t16_tooManyProperties() {
@@ -523,6 +548,7 @@ void test::validateInput_t16_tooManyProperties() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::tooManyProperties, "Device", "", 0, 102) };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t17_invalidPropertyNameType() {
@@ -534,6 +560,7 @@ void test::validateInput_t17_invalidPropertyNameType() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::invalidCharacters, QStringLiteral("свойства №1 в классе Device")) };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t18_emptyPropertyNameLength() {
@@ -548,6 +575,7 @@ void test::validateInput_t18_emptyPropertyNameLength() {
         Error(ErrorType::invalidCharacters, "", ""),
     };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t19_invalidValueCountType() {
@@ -559,6 +587,7 @@ void test::validateInput_t19_invalidValueCountType() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::invalidValueCountType, "p") };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t20_valueCountOutOfRange() {
@@ -570,6 +599,7 @@ void test::validateInput_t20_valueCountOutOfRange() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::invalidValueRange, "p", "", 1500) };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t21_emptyExpectedValue() {
@@ -581,6 +611,7 @@ void test::validateInput_t21_emptyExpectedValue() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::emptyExpectedValue, "p") };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t22_tooManyExpectedValues() {
@@ -602,6 +633,7 @@ void test::validateInput_t22_tooManyExpectedValues() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::tooManyExpectedValues, "p", "", 0, 102) };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 void test::validateInput_t23_expectedValueNotANumber() {
@@ -613,6 +645,7 @@ void test::validateInput_t23_expectedValueNotANumber() {
     QCOMPARE(res, false);
     QSet<Error> expectedErrors = { Error(ErrorType::invalidValueType, "p") };
     QVERIFY((expectedErrors - errors) == QSet<Error>());
+    QVERIFY((errors - expectedErrors) == QSet<Error>());
 }
 
 // ============================================================================
@@ -628,6 +661,8 @@ void test::buildClassHierarchy_t1_simpleInheritance() {
 
     buildClassHierarchy(hierarchy, parsedClasses);
 
+    QVERIFY(hasNode(hierarchy, "Device"));
+    QVERIFY(hasNode(hierarchy, "SmartDevice"));
     QCOMPARE(hierarchy.classes.size(), 2);
     QVERIFY(hasEdge(hierarchy, "Device", "SmartDevice"));
     QCOMPARE(hasEdge(hierarchy, "SmartDevice", "Device"), false);
@@ -643,6 +678,10 @@ void test::buildClassHierarchy_t2_multilevelHierarchy() {
 
     buildClassHierarchy(hierarchy, parsedClasses);
 
+    QVERIFY(hasNode(hierarchy, "A"));
+    QVERIFY(hasNode(hierarchy, "B"));
+    QVERIFY(hasNode(hierarchy, "C"));
+    QCOMPARE(hierarchy.classes.size(), 3);
     QVERIFY(hasEdge(hierarchy, "A", "B"));
     QVERIFY(hasEdge(hierarchy, "B", "C"));
     QVERIFY(hasEdge(hierarchy, "A", "C"));
@@ -657,6 +696,8 @@ void test::buildClassHierarchy_t3_independentClasses() {
 
     buildClassHierarchy(hierarchy, parsedClasses);
 
+    QVERIFY(hasNode(hierarchy, "A"));
+    QVERIFY(hasNode(hierarchy, "B"));
     QCOMPARE(hierarchy.classes.size(), 2);
     QCOMPARE(hasEdge(hierarchy, "A", "B"), false);
     QCOMPARE(hasEdge(hierarchy, "B", "A"), false);
@@ -673,6 +714,11 @@ void test::buildClassHierarchy_t4_diamondHierarchy() {
 
     buildClassHierarchy(hierarchy, parsedClasses);
 
+    QVERIFY(hasNode(hierarchy, "A"));
+    QVERIFY(hasNode(hierarchy, "B"));
+    QVERIFY(hasNode(hierarchy, "C"));
+    QVERIFY(hasNode(hierarchy, "D"));
+    QCOMPARE(hierarchy.classes.size(), 4);
     QVERIFY(hasEdge(hierarchy, "A", "B"));
     QVERIFY(hasEdge(hierarchy, "A", "C"));
     QVERIFY(hasEdge(hierarchy, "A", "D"));
@@ -697,6 +743,8 @@ void test::buildClassHierarchy_t6_cyclicDependency() {
 
     buildClassHierarchy(hierarchy, parsedClasses);
 
+    QVERIFY(hasNode(hierarchy, "A"));
+    QVERIFY(hasNode(hierarchy, "B"));
     QCOMPARE(hierarchy.classes.size(), 2);
     QCOMPARE(hasEdge(hierarchy, "A", "B"), false);
     QCOMPARE(hasEdge(hierarchy, "B", "A"), false);
@@ -712,6 +760,9 @@ void test::buildClassHierarchy_t7_fullGraph() {
 
     buildClassHierarchy(hierarchy, parsedClasses);
 
+    QVERIFY(hasNode(hierarchy, "A"));
+    QVERIFY(hasNode(hierarchy, "B"));
+    QVERIFY(hasNode(hierarchy, "C"));
     QCOMPARE(hierarchy.classes.size(), 3);
     QCOMPARE(hasEdge(hierarchy, "A", "B"), false);
     QCOMPARE(hasEdge(hierarchy, "A", "C"), false);
@@ -730,6 +781,7 @@ void test::buildClassHierarchy_t8_duplicateClassName() {
 
     buildClassHierarchy(hierarchy, parsedClasses);
 
+    QVERIFY(hasNode(hierarchy, "A"));
     QCOMPARE(hierarchy.classes.size(), 1);
     QCOMPARE(hierarchy.edges.size(), 1);
     QCOMPARE(hasEdge(hierarchy, "A", "A"), false);
